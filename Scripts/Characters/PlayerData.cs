@@ -1,0 +1,75 @@
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "new PlayerData", menuName = "PlayerData")]
+public class PlayerData : ScriptableObject
+{
+    [Header("Gravity")]
+    [HideInInspector] public float gravityStrength;
+    [HideInInspector] public float gravityScale;
+    [Space(4)]
+    public float fallGravityMult;
+    public float maxFallSpeed;
+    [Space(4)]
+    public float fastFallGravityMult;
+    public float maxFastFallSpeed;
+
+    [Space(20)]
+
+    [Header("Run")]
+    public float runMaxSpeed;
+    public float runAcceleration;
+    [HideInInspector] public float runAccelAmount;
+    public float runDecceleration;
+    [HideInInspector] public float runDeccelAmount;
+    [Space(4)]
+    [Range(0f, 1f)] public float accelInAir;
+    [Range(0f, 1f)] public float deccelInAir;
+    [Space(4)]
+    public bool doConserveMomentum = true;
+
+    [Space(20)]
+    [Header("Jump")]
+    public float jumpHeight;
+    public float jumpTimeToApex;
+    [HideInInspector] public float jumpForce;
+
+    [Header("Both Jumps")]
+    public float jumpCutGravityMult;
+    [Range(0f, 1f)] public float JumpHangGravityMult;
+    public float jumpHangTimeThreshold;
+    [Space(0.5f)]
+    public float jumpHangAccelerationMult;
+    public float jumpHangMaxSpeedMult;
+
+    [Header("Wall Jump")]
+    public Vector2 wallJumpForce;
+    [Space(4)]
+    [Range(0f, 1f)] public float wallJumpRunLerp;
+    [Range(0f, 1.5f)] public float wallJumpTime;
+    public bool doTurnOnWallJump;
+
+    [Space(20)]
+
+    [Header("Slider")]
+    public float slideSpeed;
+    public float slideAccel;
+
+    [Header("Assists")]
+    [Range(0.01f, 0.5f)] public float coyoteTime;
+    [Range(0.01f, 0.5f)] public float JumpInputBufferTime;
+
+    private void OnValidate()
+    {
+        gravityStrength = -(2* jumpHeight) / (jumpTimeToApex * jumpTimeToApex);
+        gravityScale = gravityStrength / Physics2D.gravity.y;
+
+        runAccelAmount = (50 * runAcceleration) / runMaxSpeed;
+        runDeccelAmount = (50 * runDecceleration) / runMaxSpeed;
+
+        jumpForce = Mathf.Abs(gravityStrength) * jumpTimeToApex;
+
+        runAcceleration = Mathf.Clamp(runAcceleration, 0.01f, runMaxSpeed);
+        runDecceleration = Mathf.Clamp(runDecceleration, 0.01f, runMaxSpeed);
+    }
+
+}
