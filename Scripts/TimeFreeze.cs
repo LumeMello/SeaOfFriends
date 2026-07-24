@@ -3,6 +3,20 @@ using UnityEngine;
 
 public class TimeFreeze : MonoBehaviour
 {
+
+    public static TimeFreeze instance;
+
+    private void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Destroy(instance);
+        }
+    }
     public void FreezeTime(float duration)
     {
         StartCoroutine(DoTimeFreeze(duration));
