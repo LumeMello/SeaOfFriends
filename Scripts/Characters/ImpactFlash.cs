@@ -3,6 +3,20 @@ using UnityEngine;
 
 public class ImpactFlash : MonoBehaviour
 {
+    public static ImpactFlash instance;
+
+    private void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Destroy(instance);
+        }
+    }
+
     public void Flash(SpriteRenderer spriteRend, float duration, Color flashColor)
     {
         StartCoroutine(DoFlash(spriteRend, duration, flashColor));

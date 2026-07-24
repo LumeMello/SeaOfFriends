@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
@@ -8,6 +9,9 @@ public class PlayerMovement : MonoBehaviour
     #region Variable
 
     public Rigidbody2D rb {  get; private set; }
+    public SpriteRenderer sr {  get; private set; }
+    public TrailRenderer tr { get; private set; }
+    public Collider2D cl { get; private set; }
 
     public bool IsFacingRight {  get; private set; }
     public bool IsJumping { get; private set; }
@@ -22,10 +26,20 @@ public class PlayerMovement : MonoBehaviour
     private bool _isJumpCut;
     private bool _isJumpFalling;
 
+    private bool _isDashing;
+    private bool _canDash = true;
+
+    private bool _active = true;
+
     private float _wallJumpStartTime;
     private int _lastWallJumpDir;
 
     private Vector2 _moveInput;
+    private Vector2 _dashDir;
+    private Vector2 _respawnPos;
+
+    private Color originalColor;
+
     public float LastPressedJumpTime { get; private set; }
 
     [Header("Checks")]
@@ -43,6 +57,12 @@ public class PlayerMovement : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        sr = GetComponent<SpriteRenderer>();
+        tr = GetComponent<TrailRenderer>();
+        cl = GetComponent<Collider2D>();
+
+        SetRespawnPoint(transform.position);
+        originalColor = sr.color;
     }
 
     private void Start()
@@ -53,6 +73,10 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
+        if (!_active)
+        {
+            return;
+        }
         #region TIMERS
 
         LastOnGroundTime -= Time.deltaTime;
@@ -67,6 +91,7 @@ public class PlayerMovement : MonoBehaviour
 
         _moveInput.x = Input.GetAxisRaw("Horizontal");
         _moveInput.y = Input.GetAxisRaw("Vertical");
+        var dashInput = Input.GetKeyDown(KeyCode.LeftShift);
 
         if(_moveInput.x != 0)
         {
@@ -82,6 +107,22 @@ public class PlayerMovement : MonoBehaviour
         {
             OnJumpUpInput();
         }
+
+        if (dashInput && _canDash)
+        {
+            _isDashing = true;
+            _canDash = false;
+            tr.emitting = true;
+            _dashDir = new Vector2(_moveInput.x, _moveInput.y);
+
+            if (_dashDir == Vector2.zero)
+            {
+                _dashDir = new Vector2(transform.localScale.x, 0);
+            }
+            StartCoroutine(StopDashing());
+        }
+
+        
         #endregion
 
         #region Collision Checks
@@ -91,6 +132,11 @@ public class PlayerMovement : MonoBehaviour
             if (Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize,0,_groundLayer) && !IsJumping)
             {
                 LastOnGroundTime = Data.coyoteTime;
+                if (!_isDashing)
+                {
+                    _canDash = true;
+                    sr.color = originalColor;
+                }
             }
 
             bool frontIsRight = _frontWallCheckPoint.position.x > transform.position.x;
@@ -206,7 +252,16 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (IsWallJumping)
+        if (!_active)
+        {
+            return;
+        }
+
+        if (_isDashing)
+        {
+            Dash();
+        }
+        else if (IsWallJumping)
         {
             Run(Data.wallJumpRunLerp);
         }
@@ -215,8 +270,12 @@ public class PlayerMovement : MonoBehaviour
             Run(1);
         }
 
-        if (IsSliding)
+        if (IsSliding && !_isDashing)
         {
+            if (rb.linearVelocity.y > 0)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, -1f);
+            }
             Slide();
         }
     }
@@ -339,6 +398,7 @@ public class PlayerMovement : MonoBehaviour
         Vector2 force = new Vector2(Data.wallJumpForce.x * dir, Data.wallJumpForce.y);
 
         rb.AddForce(force, ForceMode2D.Impulse);
+        ImpactFlash.instance.Flash(sr, 0.15f, Color.white);
 
         if (Data.doTurnOnWallJump)
         {
@@ -353,12 +413,32 @@ public class PlayerMovement : MonoBehaviour
     #region Other Movement Methods
     private void Slide()
     {
-        float speedDif = Data.slideSpeed - rb.linearVelocity.y;
-        float movement = speedDif * Data.slideAccel;
+        ///float speedDif = Data.slideSpeed - rb.linearVelocity.y;
+        ///float movement = speedDif * Data.slideAccel;
 
-        movement = Mathf.Clamp(movement, -Mathf.Abs(speedDif) * (1/Time.fixedDeltaTime), Mathf.Abs(speedDif) * (1/Time.fixedDeltaTime));
+        ///movement = Mathf.Clamp(movement, -Mathf.Abs(speedDif) * (1/Time.fixedDeltaTime), Mathf.Abs(speedDif) * (1/Time.fixedDeltaTime));
 
-        rb.AddForce(movement * Vector2.up);
+        ///rb.AddForce(movement * Vector2.up);
+        ///
+        float targetSpeed = -Mathf.Abs(Data.slideSpeed);
+        float yVelocity = Mathf.MoveTowards(rb.linearVelocity.y,targetSpeed, Data.slideAccel * Time.fixedDeltaTime);
+
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, yVelocity);
+    }
+
+    private void Dash()
+    {
+        rb.linearVelocity = _dashDir.normalized * Data.dashVelocity;
+    }
+
+    private IEnumerator StopDashing()
+    {
+        sr.color = Color.yellow;
+        yield return new WaitForSeconds(Data.dashTime);
+        tr.emitting = false;
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x * 0.5f, -0.1f);
+        _isDashing = false;
+
     }
 
     #endregion
@@ -417,6 +497,38 @@ public class PlayerMovement : MonoBehaviour
         Gizmos.color = Color.blue;
         Gizmos.DrawWireCube(_frontWallCheckPoint.position, _wallCheckSize);
         Gizmos.DrawWireCube(_backWallCheckPoint.position, _wallCheckSize);
+    }
+
+    #endregion
+
+    #region Life Control Methods
+
+    public void Die()
+    {
+        _active = false;
+        cl.enabled = false;
+        StartCoroutine(Respawn());
+    }
+
+    public void SetRespawnPoint(Vector2 position)
+    {
+        _respawnPos = position;
+    }
+
+    private IEnumerator Respawn()
+    {
+        CameraManager.instance.BasicScreenShake(Data.deathCameraShakeIntensity, Data.deathCameraShakeFrequency,Data.deathCameraShakeDuration);
+        yield return new WaitForSeconds(0.80f);
+        SetGravityScale(0);
+        cl.enabled = true;
+        transform.position = _respawnPos;
+        SetGravityScale(Data.gravityScale);
+        CameraManager.instance.ChangeTarget(transform);
+        yield return new WaitForSeconds(0.2f);
+
+        _canDash = true;
+        _active = true;
+        
     }
 
     #endregion

@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "new PlayerData", menuName = "PlayerData")]
@@ -57,6 +58,19 @@ public class PlayerData : ScriptableObject
     [Header("Assists")]
     [Range(0.01f, 0.5f)] public float coyoteTime;
     [Range(0.01f, 0.5f)] public float JumpInputBufferTime;
+
+    [Space(20)]
+
+    [Header("Death Camera")]
+    [Range(0.01f, 5f)] public float deathCameraShakeIntensity;
+    [Range(0.01f, 1f)] public float deathCameraShakeFrequency;
+    [Range(0.01f, 1f)] public float deathCameraShakeDuration;
+
+    [Space(20)]
+
+    [Header("Dash")]
+    public float dashVelocity;
+    [Range(0.01f, 1f)] public float dashTime;
 
     private void OnValidate()
     {
