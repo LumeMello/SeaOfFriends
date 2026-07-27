@@ -51,9 +51,12 @@ public class PlayerData : ScriptableObject
 
     [Space(20)]
 
-    [Header("Slider")]
+    [Header("Sliders")]
     public float slideSpeed;
     public float slideAccel;
+    public float groundSlideSpeed;
+    public float groundSlideAccel;
+    [Range(0.01f, 1f)] public float groundSlideTime;
 
     [Header("Assists")]
     [Range(0.01f, 0.5f)] public float coyoteTime;
@@ -71,6 +74,10 @@ public class PlayerData : ScriptableObject
     [Header("Dash")]
     public float dashVelocity;
     [Range(0.01f, 1f)] public float dashTime;
+
+    [Header("Glider")]
+    [Range(0.01f, 1f)] public float gliderGravityMult;
+    [Range(0.01f, 1f)] public float gliderInputBuffer;
 
     private void OnValidate()
     {

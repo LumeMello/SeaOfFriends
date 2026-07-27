@@ -1,9 +1,11 @@
+using JetBrains.Annotations;
 using System.Collections;
 using UnityEngine;
 
 public class ImpactFlash : MonoBehaviour
 {
     public static ImpactFlash instance;
+    public bool bright = false;
 
     private void Awake()
     {
@@ -19,6 +21,7 @@ public class ImpactFlash : MonoBehaviour
 
     public void Flash(SpriteRenderer spriteRend, float duration, Color flashColor)
     {
+        bright = true;
         StartCoroutine(DoFlash(spriteRend, duration, flashColor));
     }
 
@@ -30,5 +33,6 @@ public class ImpactFlash : MonoBehaviour
         yield return new WaitForSeconds(duration);
 
         spriteRend.color = originalColor;
+        bright = false;
     }
 }

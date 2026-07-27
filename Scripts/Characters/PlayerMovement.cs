@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Runtime.CompilerServices;
+using Unity.Cinemachine;
 using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
@@ -11,25 +12,33 @@ public class PlayerMovement : MonoBehaviour
     public Rigidbody2D rb {  get; private set; }
     public SpriteRenderer sr {  get; private set; }
     public TrailRenderer tr { get; private set; }
-    public Collider2D cl { get; private set; }
+    public CircleCollider2D cl { get; private set; }
+    private Viewer viewer = null;
 
     public bool IsFacingRight {  get; private set; }
     public bool IsJumping { get; private set; }
     public bool IsWallJumping { get; private set; }
     public bool IsSliding { get; private set; }
+    public bool IsGroundSliding { get; private set; }
 
     public float LastOnGroundTime { get; private set; }
     public float LastOnWallTime { get; private set; }
     public float LastOnWallRightTime { get; private set; }
     public float LastOnWallLeftTime { get; private set; }
+    public float LastOnGlidePressed {  get; private set; }
+
+    private float _originalRadius = 0.4f;
+    private float _originalYOffset = -0.1f;
 
     private bool _isJumpCut;
     private bool _isJumpFalling;
 
     private bool _isDashing;
-    private bool _canDash = true;
+    public bool _canDash = true;
+    private bool _isGliding = false;
 
     private bool _active = true;
+    private bool _bright = false;
 
     private float _wallJumpStartTime;
     private int _lastWallJumpDir;
@@ -39,6 +48,7 @@ public class PlayerMovement : MonoBehaviour
     private Vector2 _respawnPos;
 
     private Color originalColor;
+    private Coroutine _groundSlideCoroutine;
 
     public float LastPressedJumpTime { get; private set; }
 
@@ -59,7 +69,7 @@ public class PlayerMovement : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         sr = GetComponent<SpriteRenderer>();
         tr = GetComponent<TrailRenderer>();
-        cl = GetComponent<Collider2D>();
+        cl = GetComponent<CircleCollider2D>();
 
         SetRespawnPoint(transform.position);
         originalColor = sr.color;
@@ -69,12 +79,21 @@ public class PlayerMovement : MonoBehaviour
     {
         SetGravityScale(Data.gravityScale);
         IsFacingRight = true;
+        IsGroundSliding = false;
     }
 
     private void Update()
     {
+
         if (!_active)
         {
+            if (viewer != null) { 
+                if (viewer.active == false)
+                {
+                    CameraManager.instance.ChangeTarget(transform);
+                    _active = true;
+                }
+            }
             return;
         }
         #region TIMERS
@@ -85,6 +104,7 @@ public class PlayerMovement : MonoBehaviour
         LastOnWallLeftTime -= Time.deltaTime;
 
         LastPressedJumpTime -= Time.deltaTime;
+        LastOnGlidePressed -= Time.deltaTime;
         #endregion
 
         #region Input Handler
@@ -98,14 +118,53 @@ public class PlayerMovement : MonoBehaviour
             CheckDirectionToFace(_moveInput.x > 0);
         }
 
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.J))
+        if ((Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.J)) && !Input.GetKey(KeyCode.S))
         {
             OnJumpInput();
         }
 
-        if (Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.C) || Input.GetKeyUp(KeyCode.J))
-        {
+        if ((Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.C) || Input.GetKeyUp(KeyCode.J)) && !Input.GetKey(KeyCode.S))
+        {           
             OnJumpUpInput();
+        }
+
+        if ((Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.C) || Input.GetKeyDown(KeyCode.J)) && Input.GetKey(KeyCode.S) && Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _groundLayer) && !IsGroundSliding && !_isDashing && _canDash)
+        {
+            if (sr.color == Color.yellow)
+            {
+                sr.color = originalColor;
+            }
+
+            IsGroundSliding = true;
+            if (_groundSlideCoroutine != null)
+            {
+                StopCoroutine(_groundSlideCoroutine);
+            }
+            _groundSlideCoroutine = StartCoroutine(StopGroundSliding());
+        }
+
+        if (((Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.C) || Input.GetKeyUp(KeyCode.J) || Input.GetKeyUp(KeyCode.S)) && IsGroundSliding) || !Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _groundLayer))
+        {
+            CancelSlide();
+        }
+
+        if (IsJumping && Input.GetKeyDown(KeyCode.V))
+        {
+            LastOnGlidePressed = Data.gliderInputBuffer;
+        }
+        if (IsJumping && Input.GetKeyUp(KeyCode.V))
+        {
+            LastOnGlidePressed -= Data.gliderInputBuffer;
+        }
+
+        if (_isJumpFalling && Input.GetKeyDown(KeyCode.V))
+        {
+            _isGliding = true;
+        }
+
+        if (_isGliding && Input.GetKeyUp(KeyCode.V))
+        {
+            _isGliding = false;
         }
 
         if (dashInput && _canDash)
@@ -122,6 +181,13 @@ public class PlayerMovement : MonoBehaviour
             StartCoroutine(StopDashing());
         }
 
+        if (viewer != null && Input.GetKeyDown(KeyCode.E))
+        {
+            viewer.StartViewing();
+            rb.linearVelocity = Vector2.zero;
+            _active = false;
+        }
+
         
         #endregion
 
@@ -135,7 +201,10 @@ public class PlayerMovement : MonoBehaviour
                 if (!_isDashing)
                 {
                     _canDash = true;
-                    sr.color = originalColor;
+                }
+                if (_isGliding == true)
+                {
+                    _isGliding = false;
                 }
             }
 
@@ -168,6 +237,10 @@ public class PlayerMovement : MonoBehaviour
             {
                 _isJumpFalling = true;
             }
+            if (LastOnGlidePressed > 0)
+            {
+                _isGliding = true;
+            }
         }
 
         if (IsWallJumping && Time.time - _wallJumpStartTime > Data.wallJumpTime)
@@ -183,6 +256,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 _isJumpFalling = false;
             }
+            
         }
 
         if (CanJump() && LastPressedJumpTime > 0)
@@ -217,6 +291,8 @@ public class PlayerMovement : MonoBehaviour
         {
             IsSliding = false;
         }
+
+        
         #endregion
 
         #region Gravity
@@ -224,6 +300,10 @@ public class PlayerMovement : MonoBehaviour
         if (IsSliding)
         {
             SetGravityScale(0);
+        }
+        else if (_isGliding)
+        {
+            SetGravityScale(Data.gravityScale * Data.gliderGravityMult);
         }
         else if(rb.linearVelocity.y < 0 && _moveInput.y < 0)
         {
@@ -248,6 +328,28 @@ public class PlayerMovement : MonoBehaviour
             SetGravityScale(Data.gravityScale);
         }
         #endregion
+
+        #region Coloring
+
+        if (_bright)
+        {
+            _bright = ImpactFlash.instance.bright;
+            return;
+        }
+        else if (!_canDash || _isDashing)
+        {
+            sr.color = Color.yellow;
+        }
+        else if (IsGroundSliding)
+        {
+            sr.color = Color.blueViolet;
+        }
+        else
+        {
+            sr.color = originalColor;
+        }
+
+        #endregion
     }
 
     private void FixedUpdate()
@@ -259,7 +361,15 @@ public class PlayerMovement : MonoBehaviour
 
         if (_isDashing)
         {
+            if (IsGroundSliding)
+            {
+                CancelSlide();
+            }
             Dash();
+        }
+        else if (IsGroundSliding)
+        {
+            GroundSlide();
         }
         else if (IsWallJumping)
         {
@@ -269,7 +379,7 @@ public class PlayerMovement : MonoBehaviour
         {
             Run(1);
         }
-
+        
         if (IsSliding && !_isDashing)
         {
             if (rb.linearVelocity.y > 0)
@@ -398,6 +508,7 @@ public class PlayerMovement : MonoBehaviour
         Vector2 force = new Vector2(Data.wallJumpForce.x * dir, Data.wallJumpForce.y);
 
         rb.AddForce(force, ForceMode2D.Impulse);
+        _bright = true;
         ImpactFlash.instance.Flash(sr, 0.15f, Color.white);
 
         if (Data.doTurnOnWallJump)
@@ -413,13 +524,7 @@ public class PlayerMovement : MonoBehaviour
     #region Other Movement Methods
     private void Slide()
     {
-        ///float speedDif = Data.slideSpeed - rb.linearVelocity.y;
-        ///float movement = speedDif * Data.slideAccel;
-
-        ///movement = Mathf.Clamp(movement, -Mathf.Abs(speedDif) * (1/Time.fixedDeltaTime), Mathf.Abs(speedDif) * (1/Time.fixedDeltaTime));
-
-        ///rb.AddForce(movement * Vector2.up);
-        ///
+        
         float targetSpeed = -Mathf.Abs(Data.slideSpeed);
         float yVelocity = Mathf.MoveTowards(rb.linearVelocity.y,targetSpeed, Data.slideAccel * Time.fixedDeltaTime);
 
@@ -431,13 +536,43 @@ public class PlayerMovement : MonoBehaviour
         rb.linearVelocity = _dashDir.normalized * Data.dashVelocity;
     }
 
+    private void GroundSlide()
+    {
+        cl.radius = 0.25f;
+        cl.offset = new Vector2(0, -0.25f);
+        
+
+        float direction = IsFacingRight ? 1 : -1;
+        float xVelocity = Mathf.MoveTowards(rb.linearVelocity.x, Data.groundSlideSpeed * direction, Data.groundSlideAccel * Time.fixedDeltaTime);
+
+        rb.linearVelocity = new Vector2(xVelocity, rb.linearVelocity.y);
+    }
+    private void CancelSlide()
+    {
+        IsGroundSliding = false;
+        cl.radius = _originalRadius;
+        cl.offset = new Vector2(0, _originalYOffset);
+
+        if (_groundSlideCoroutine != null)
+        {
+            StopCoroutine(_groundSlideCoroutine);
+            _groundSlideCoroutine = null;
+        }
+    }
+
     private IEnumerator StopDashing()
     {
-        sr.color = Color.yellow;
         yield return new WaitForSeconds(Data.dashTime);
         tr.emitting = false;
         rb.linearVelocity = new Vector2(rb.linearVelocity.x * 0.5f, -0.1f);
         _isDashing = false;
+
+    }
+
+    private IEnumerator StopGroundSliding()
+    {
+        yield return new WaitForSeconds(Data.groundSlideTime);
+        CancelSlide();
 
     }
 
@@ -474,6 +609,8 @@ public class PlayerMovement : MonoBehaviour
         return IsWallJumping && rb.linearVelocity.y > 0;
     }
 
+    
+
     public bool CanSlide()
     {
         if (LastOnWallTime > 0 && !IsJumping && !IsWallJumping && LastOnGroundTime <=0)
@@ -483,6 +620,25 @@ public class PlayerMovement : MonoBehaviour
         else
         {
             return false;
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.tag == "Viewer")
+        {
+            viewer = other.GetComponent<Viewer>();
+            
+        }
+
+        
+    }
+
+    private void OnTriggerExit2D(Collider2D other)
+    {
+        if (other.tag == "Viewer")
+        {
+            viewer = null;
         }
     }
 
@@ -518,12 +674,19 @@ public class PlayerMovement : MonoBehaviour
     private IEnumerator Respawn()
     {
         CameraManager.instance.BasicScreenShake(Data.deathCameraShakeIntensity, Data.deathCameraShakeFrequency,Data.deathCameraShakeDuration);
-        yield return new WaitForSeconds(0.80f);
+        DeathTransition.instance.SetTransition(true);
+        sr.enabled = false;
+        rb.linearVelocity = Vector2.zero;
+        yield return new WaitForSeconds(1.3f);
         SetGravityScale(0);
         cl.enabled = true;
         transform.position = _respawnPos;
+        CameraManager.instance.NewDeath();
+        yield return new WaitForSeconds(1f);
         SetGravityScale(Data.gravityScale);
         CameraManager.instance.ChangeTarget(transform);
+        DeathTransition.instance.SetTransition(false);
+        sr.enabled = true;
         yield return new WaitForSeconds(0.2f);
 
         _canDash = true;
