@@ -32,6 +32,7 @@ public class PlayerMovement : MonoBehaviour
 
     private bool _isJumpCut;
     private bool _isJumpFalling;
+    private bool _firstOnGround = false;
 
     private bool _isDashing;
     public bool _canDash = true;
@@ -60,14 +61,20 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private Transform _backWallCheckPoint;
     [SerializeField] private Vector2 _wallCheckSize = new Vector2(0.5f,0.6f);
 
+    [Space(4)]
+
     [Header("Layers & Tags")]
     [SerializeField] private LayerMask _groundLayer;
+
+    [Space(4)]
+    [SerializeField] private Transform spriteTransform;
+
     #endregion
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        sr = GetComponent<SpriteRenderer>();
+        sr = GetComponentInChildren<SpriteRenderer>();
         tr = GetComponent<TrailRenderer>();
         cl = GetComponent<CircleCollider2D>();
 
@@ -96,6 +103,20 @@ public class PlayerMovement : MonoBehaviour
             }
             return;
         }
+
+        if (_firstOnGround == true)
+        {
+            Squash();
+            if (spriteTransform.localScale.x == Data.scaleToSquash_x || spriteTransform.localScale.y == Data.scaleToSquash_y)
+            {
+                _firstOnGround = false;
+            }
+        }
+        else if (_firstOnGround == false)
+        {
+            Disquash();
+        }
+
         #region TIMERS
 
         LastOnGroundTime -= Time.deltaTime;
@@ -145,6 +166,7 @@ public class PlayerMovement : MonoBehaviour
 
         if (((Input.GetKeyUp(KeyCode.Space) || Input.GetKeyUp(KeyCode.C) || Input.GetKeyUp(KeyCode.J) || Input.GetKeyUp(KeyCode.S)) && IsGroundSliding) || !Physics2D.OverlapBox(_groundCheckPoint.position, _groundCheckSize, 0, _groundLayer))
         {
+            _firstOnGround = false;
             CancelSlide();
         }
 
@@ -173,6 +195,7 @@ public class PlayerMovement : MonoBehaviour
             _canDash = false;
             tr.emitting = true;
             _dashDir = new Vector2(_moveInput.x, _moveInput.y);
+            _firstOnGround = false;
 
             if (_dashDir == Vector2.zero)
             {
@@ -208,17 +231,12 @@ public class PlayerMovement : MonoBehaviour
                 }
             }
 
-            bool frontIsRight = _frontWallCheckPoint.position.x > transform.position.x;
-
-            Transform rightPoint = frontIsRight ? _frontWallCheckPoint : _backWallCheckPoint;
-            Transform leftPoint = frontIsRight ? _backWallCheckPoint : _frontWallCheckPoint;
-
-            if (Physics2D.OverlapBox(rightPoint.position, _wallCheckSize, 0, _groundLayer) && !IsWallJumping) 
+            if (Physics2D.OverlapBox(_frontWallCheckPoint.position, _wallCheckSize, 0, _groundLayer) && !IsWallJumping) 
             {
                 LastOnWallRightTime = Data.coyoteTime;
             }
 
-            if (Physics2D.OverlapBox(leftPoint.position, _wallCheckSize, 0, _groundLayer) && !IsWallJumping)
+            if (Physics2D.OverlapBox(_backWallCheckPoint.position, _wallCheckSize, 0, _groundLayer) && !IsWallJumping)
             {
                 LastOnWallLeftTime = Data.coyoteTime;
             }
@@ -232,6 +250,7 @@ public class PlayerMovement : MonoBehaviour
         if (IsJumping && rb.linearVelocity.y < 0)
         {
             IsJumping = false;
+            Distretch();
 
             if (!IsWallJumping)
             {
@@ -246,6 +265,7 @@ public class PlayerMovement : MonoBehaviour
         if (IsWallJumping && Time.time - _wallJumpStartTime > Data.wallJumpTime)
         {
             IsWallJumping = false;
+            Distretch();
         }
 
         if (LastOnGroundTime > 0 && !IsJumping && !IsWallJumping)
@@ -265,6 +285,7 @@ public class PlayerMovement : MonoBehaviour
             IsWallJumping = false;
             _isJumpCut = false;
             _isJumpFalling = false;
+            _firstOnGround = false;
             Jump();
         }
 
@@ -276,7 +297,7 @@ public class PlayerMovement : MonoBehaviour
             _isJumpFalling = false;
             _wallJumpStartTime = Time.time;
             _lastWallJumpDir = (LastOnWallRightTime > 0) ? -1 : 1;
-
+            _firstOnGround = false;
             WallJump(_lastWallJumpDir);
         }
         #endregion
@@ -467,11 +488,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void Turn()
     {
-        Vector3 scale = transform.localScale;
-        scale.x *= -1;
-        transform.localScale = scale;
-
         IsFacingRight = !IsFacingRight;
+        sr.flipX = !IsFacingRight;
     }
 
     #endregion
@@ -493,6 +511,8 @@ public class PlayerMovement : MonoBehaviour
         rb.AddForce(Vector2.up * force, ForceMode2D.Impulse);
 
         #endregion
+
+        Stretch();
     }
 
     private void WallJump(int dir)
@@ -517,6 +537,8 @@ public class PlayerMovement : MonoBehaviour
         }
 
         #endregion
+
+        Stretch();
     }
 
     #endregion
@@ -540,7 +562,8 @@ public class PlayerMovement : MonoBehaviour
     {
         cl.radius = 0.25f;
         cl.offset = new Vector2(0, -0.25f);
-        
+        _firstOnGround = true;
+
 
         float direction = IsFacingRight ? 1 : -1;
         float xVelocity = Mathf.MoveTowards(rb.linearVelocity.x, Data.groundSlideSpeed * direction, Data.groundSlideAccel * Time.fixedDeltaTime);
@@ -572,6 +595,7 @@ public class PlayerMovement : MonoBehaviour
     private IEnumerator StopGroundSliding()
     {
         yield return new WaitForSeconds(Data.groundSlideTime);
+        _firstOnGround = false;
         CancelSlide();
 
     }
@@ -692,6 +716,72 @@ public class PlayerMovement : MonoBehaviour
         _canDash = true;
         _active = true;
         
+    }
+
+    #endregion
+
+    #region Squash and Stretch
+    
+    private void Stretch()
+    {
+        Vector2 targetSize = new Vector2(Data.scaleToStretch_x, Data.scaleToStretch_y);
+        spriteTransform.localScale = Vector2.MoveTowards(spriteTransform.localScale, targetSize, Data.timeToStretch);
+    }
+
+    private void Distretch()
+    {
+        Vector2 targetSize = new Vector2(1f, 1f);
+        spriteTransform.localScale = Vector2.MoveTowards(spriteTransform.localScale, targetSize, Data.timeToStretch);
+    }
+
+    private void Squash()
+    {
+        Vector2 targetSize = new Vector2(Data.scaleToSquash_x, Data.scaleToSquash_y);
+        spriteTransform.localScale = Vector2.MoveTowards(spriteTransform.localScale, targetSize, (1/Data.timeToSquash) * Time.deltaTime);
+    }
+
+    private void Disquash()
+    {
+        Vector2 targetSize = new Vector2(1f, 1f);
+        spriteTransform.localScale = Vector2.MoveTowards(spriteTransform.localScale, targetSize, (1 / Data.timeToSquash) * Time.deltaTime);
+    }
+
+    private void OnCollisionEnter2D(Collision2D other)
+    {
+        if (((1 << other.gameObject.layer) & _groundLayer) != 0 && !IsJumping)
+        {
+            StartCoroutine(OnFallSquashEffect());
+        }
+    }
+
+    private IEnumerator OnFallSquashEffect()
+    {
+        float elapsed = 0f;
+
+        while (elapsed < Data.timeToSquash)
+        {
+            elapsed += Time.deltaTime;
+            float percent = elapsed / Data.timeToSquash;
+
+            Vector2 targetSquash = new Vector2(Data.scaleToSquash_x,Data.scaleToSquash_y);
+            
+            spriteTransform.localScale = Vector2.Lerp(spriteTransform.localScale, targetSquash, percent);
+
+            yield return null;
+        }
+
+        elapsed = 0f;
+
+        while (elapsed < Data.timeToSquash)
+        {
+            elapsed += Time.deltaTime;
+            float percent = elapsed / Data.timeToSquash;
+
+            spriteTransform.localScale = Vector2.Lerp(spriteTransform.localScale, Vector2.one, percent);
+
+            yield return null;
+        }
+        spriteTransform.localScale = Vector2.one;
     }
 
     #endregion

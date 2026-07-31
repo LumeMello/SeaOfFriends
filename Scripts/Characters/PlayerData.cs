@@ -4,15 +4,25 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "new PlayerData", menuName = "PlayerData")]
 public class PlayerData : ScriptableObject
 {
+    [Header("SpriteManipulation")]
+    [Range(0f, 1f)] public float timeToStretch;
+    [Range(0f, 1f)] public float timeToSquash;
+    [Range(0f, 1.5f)] public float scaleToStretch_x;
+    [Range(0f, 1.5f)] public float scaleToStretch_y;
+    [Range(0f, 1.5f)] public float scaleToSquash_x;
+    [Range(0f, 1.5f)] public float scaleToSquash_y;
+
+    [Space(20)]
+
     [Header("Gravity")]
-    [HideInInspector] public float gravityStrength;
-    [HideInInspector] public float gravityScale;
-    [Space(4)]
     public float fallGravityMult;
     public float maxFallSpeed;
     [Space(4)]
     public float fastFallGravityMult;
     public float maxFastFallSpeed;
+    [Space(4)]
+    [HideInInspector] public float gravityStrength;
+    [HideInInspector] public float gravityScale;
 
     [Space(20)]
 
