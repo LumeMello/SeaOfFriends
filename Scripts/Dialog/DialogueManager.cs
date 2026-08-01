@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Events;
+using UnityEngine.EventSystems;
 
 public class DialogueManager : MonoBehaviour
 {
@@ -39,13 +41,55 @@ public class DialogueManager : MonoBehaviour
 
     public Queue<DialogueBase.Info> dialogueInfo = new Queue<DialogueBase.Info>();
 
+    private bool isDialogueOptions;
+    [SerializeField] private GameObject dialogueOptionUI;
+    [SerializeField] private Text questionText;
+    [SerializeField] private GameObject[] OptionsButtons;
+
+    private bool inDialogue;
+    private int optionsAmount;
+
     private bool isCurrentlyTyping;
     private string completeText;
 
+    private int selectedOptionIndex = 0;
+    public bool optionsActive = false;
+
     public void EnqueueDialogue(DialogueBase db)
     {
+        if (inDialogue || optionsActive)
+        {
+            return;
+        }
+        inDialogue = true;
+
         dialogueBox.SetActive(true);
         dialogueInfo.Clear();
+
+        if (db is DialogueOptions)
+        {
+            isDialogueOptions = true;
+            DialogueOptions dialogueOptions = db as DialogueOptions;
+            optionsAmount = dialogueOptions.optionsInfo.Length;
+            questionText.text = dialogueOptions.questionTextInfo;
+            for (int i = 0; i < optionsAmount; i++)
+            {
+                OptionsButtons[i].SetActive(true);
+                OptionsButtons[i].transform.GetChild(0).gameObject.GetComponent<Text>().text = dialogueOptions.optionsInfo[i].buttonName;
+                EventBehaviour myEventHandler = OptionsButtons[i].GetComponent<EventBehaviour>();
+
+                myEventHandler.eventType = dialogueOptions.optionsInfo[i].myEvent;
+
+                if (myEventHandler.eventType == EventsType.CallADialog)
+                {
+                    myEventHandler.dialogue = dialogueOptions.optionsInfo[i].dialogue;
+                }
+            }
+        }
+        else
+        {
+            isDialogueOptions = false;
+        }
 
         foreach (DialogueBase.Info info in db.dialogueInfo)
         {
@@ -139,6 +183,65 @@ public class DialogueManager : MonoBehaviour
     public void EndofDialogue()
     {
         dialogueBox.SetActive(false);
+        OptionsLogic();
+        inDialogue = false;
+    }
+
+    private void OptionsLogic()
+    {
+        if (isDialogueOptions)
+        {
+            dialogueOptionUI.SetActive(true);
+
+            optionsActive = true;
+            selectedOptionIndex = 0;
+
+            UpdateOptionsVisuals();
+        }
+    }
+
+    public void ChangeSelectedOption(int diretion)
+    {
+        selectedOptionIndex += diretion;
+        if (selectedOptionIndex < 0)
+        {
+            selectedOptionIndex = optionsAmount - 1;
+        }
+        if (selectedOptionIndex >= optionsAmount)
+        {
+            selectedOptionIndex = 0;
+        }
+
+        UpdateOptionsVisuals();
+    }
+
+    private void UpdateOptionsVisuals()
+    {
+        for (int i = 0; i < optionsAmount; i++)
+        {
+            if (OptionsButtons[i] == null)
+            {
+                continue;
+            }
+            Image buttonImage = OptionsButtons[i].GetComponent<Image>();
+            if (buttonImage!= null)
+            {
+                buttonImage.color = (i == selectedOptionIndex) ? Color.gray : Color.black;
+            }
+        }
+    }
+
+    public void ConfirmSelectedOption()
+    {
+        EventBehaviour myEventHandler = OptionsButtons[selectedOptionIndex].GetComponent<EventBehaviour>();
+        dialogueOptionUI.SetActive(false);
+        optionsActive = false;
+        
+        if (myEventHandler != null)
+        {
+            myEventHandler.StartEvent();
+        }
+        
     }
 
 }

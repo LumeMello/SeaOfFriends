@@ -4,8 +4,8 @@ using static CharacterBase;
 public class TestScript : MonoBehaviour
 {
     public DialogueBase dialogue;
-    public CharacterBase attacker;
-    public CharacterBase defender;
+    private bool haveAlready = false;
+    
     public int id;
     public void TriggerDialogue()
     {
@@ -16,15 +16,12 @@ public class TestScript : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.E))
         {
-            if (DialogueManager.instance.dialogueBox.activeInHierarchy == true)
-            {
-                DialogueManager.instance.DequeueDialogue();
-            }
-            else
+            if(!haveAlready)
             {
                 TriggerDialogue();
+                haveAlready = true;
             }
             
         }
