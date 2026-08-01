@@ -129,6 +129,39 @@ public class PlayerMovement : MonoBehaviour
         #endregion
 
         #region Input Handler
+        if (DialogueManager.instance.dialogueBox.activeInHierarchy == true)
+        {
+            rb.linearVelocity = new Vector2(0f, 0f);
+            LastOnGroundTime = Data.coyoteTime;
+            IsJumping = false;
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                DialogueManager.instance.DequeueDialogue();
+            }
+            return;
+        }
+        else if (DialogueManager.instance.optionsActive)
+        {
+            rb.linearVelocity = new Vector2(0f,0f);
+            LastOnGroundTime = Data.coyoteTime;
+            IsJumping = false;
+            if (Input.GetKeyDown(KeyCode.W))
+            {
+                DialogueManager.instance.ChangeSelectedOption(-1);
+            }
+            else if (Input.GetKeyDown(KeyCode.S))
+            {
+                DialogueManager.instance.ChangeSelectedOption(1);
+            }
+
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                DialogueManager.instance.ConfirmSelectedOption();
+            }
+
+            return;
+        }
+        
 
         _moveInput.x = Input.GetAxisRaw("Horizontal");
         _moveInput.y = Input.GetAxisRaw("Vertical");
@@ -379,6 +412,10 @@ public class PlayerMovement : MonoBehaviour
         {
             return;
         }
+        else if (DialogueManager.instance.dialogueBox.activeInHierarchy == true || DialogueManager.instance.optionsActive)
+        {
+            return;
+        }
 
         if (_isDashing)
         {
@@ -396,6 +433,7 @@ public class PlayerMovement : MonoBehaviour
         {
             Run(Data.wallJumpRunLerp);
         }
+        
         else
         {
             Run(1);
